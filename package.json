@@ -1,0 +1,12 @@
+{
+  "name": "your-app",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "build": "echo \"No build step; using Docker image build\""
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
