@@ -11,7 +11,7 @@ jobs:
       id-token: write
       contents: read
     env:
-      AWS_REGION: ap-south-1
+      AWS_REGION: us-east-1
       ECR_REPOSITORY: your-app
       ECS_CLUSTER: your-ecs-cluster
       ECS_SERVICE: your-ecs-service
