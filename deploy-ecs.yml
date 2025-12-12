@@ -1,0 +1,62 @@
+
+name: Deploy to AWS ECS Fargate
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ap-south-1
+      ECR_REPOSITORY: your-app
+      ECS_CLUSTER: your-ecs-cluster
+      ECS_SERVICE: your-ecs-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_IAM_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        run: |
+          IMAGE_TAG=${{ github.sha }}
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          ECR_URI=$(aws ecr describe-repositories             --repository-names $ECR_REPOSITORY             --query 'repositories[0].repositoryUri' --output text)
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_URI:$IMAGE_TAG
+          docker push $ECR_URI:$IMAGE_TAG
+          echo "ECR_URI=$ECR_URI" >> $GITHUB_ENV
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Update ECS service to new task definition
+        run: |
+          # Get current task definition ARN
+          TD_ARN=$(aws ecs describe-services --cluster $ECS_CLUSTER --services $ECS_SERVICE             --query 'services[0].taskDefinition' --output text)
+          # Export current task definition JSON
+          aws ecs describe-task-definition --task-definition "$TD_ARN" --output json > td.json
+          # Use jq to replace image for the first container
+          NEW_TD=$(jq --arg IMAGE "$ECR_URI:$IMAGE_TAG"             '.taskDefinition.containerDefinitions[0].image = $IMAGE |
+             {family: .taskDefinition.family,
+              networkMode: .taskDefinition.networkMode,
+              executionRoleArn: .taskDefinition.executionRoleArn,
+              taskRoleArn: .taskDefinition.taskRoleArn,
+              containerDefinitions: .taskDefinition.containerDefinitions,
+              requiresCompatibilities: .taskDefinition.requiresCompatibilities,
+              cpu: .taskDefinition.cpu,
+              memory: .taskDefinition.memory,
+              runtimePlatform: .taskDefinition.runtimePlatform,
+              volumes: .taskDefinition.volumes}' td.json)
+          echo "$NEW_TD" > new-td.json
+          NEW_TD_ARN=$(aws ecs register-task-definition --cli-input-json file://new-td.json             --query 'taskDefinition.taskDefinitionArn' --output text)
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_SERVICE --task-definition "$NEW_TD_ARN"
+          aws ecs wait services-stable --cluster $ECS_CLUSTER --services $ECS_SERVICE
