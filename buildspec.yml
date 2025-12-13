@@ -1,0 +1,31 @@
+
+version: 0.2
+
+env:
+  variables:
+    NODE_ENV: production
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "Installing dependencies..."
+      - npm ci || npm install
+  build:
+    commands:
+      - echo "Running build (if any)..."
+      - npm run build || echo "No build step; skipping."
+  post_build:
+    commands:
+      - echo "Preparing deployment bundle..."
+      - mkdir -p bundle
+      - cp -r package.json package-lock.json bundle/ || true
+      - cp -r src/ bundle/
+      - cp appspec.yml bundle/
+      - mkdir -p bundle/scripts
+      - cp -r scripts/* bundle/scripts/
+artifacts:
+  files:
+    - bundle/**/*
+  discard-paths: no
