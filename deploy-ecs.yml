@@ -13,7 +13,7 @@ jobs:
     env:
       AWS_REGION: us-east-1
       ECR_REPOSITORY: your-app
-      ECS_CLUSTER: your-ecs-cluster
+      ECS_CLUSTER: awsecscicdstarter
       ECS_SERVICE: your-ecs-service
     steps:
       - name: Checkout
